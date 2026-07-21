@@ -1,0 +1,12 @@
+{
+  "name": "reading-room-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-01-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "reading-room-db",
+      "database_id": "908ac70f-5fba-4caf-8a58-dbd3616aecaf"
+    }
+  ]
+}

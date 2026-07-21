@@ -1,0 +1,3 @@
+INSERT INTO books (id, title, author, edition, subject, call_number, description, file, poster, recent) VALUES
+('programming-ansi-c-balagurusamy', 'Programming in ANSI C', 'E. Balagurusamy', '8th ed.', 'programming', 'CS·102·B', 'Core C syntax and control structures — the usual first read before Let Us C or Data Structures Using C.', 'books/reference-classbooks/programming-in-ansi-c-balagurusamy.pdf', NULL, 1),
+('let-us-c-kanetkar', 'Let Us C', 'Yashavant Kanetkar', '17th ed.', 'programming', 'CS·100·K', 'Beginner-friendly walkthrough of C syntax and pointers — good starting point before Data Structures Using C.', 'books/reference-classbooks/let-us-c-authentic-guide-to-c-programming-language.pdf', NULL, 1);
