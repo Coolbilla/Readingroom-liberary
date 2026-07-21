@@ -20,10 +20,13 @@ function usePdfAvailability(url) {
   return status;
 }
 
+const CLAMP_THRESHOLD = 220;
+
 export default function BookModal({ book, color, subjectLabel, onClose, onRead }) {
   const closeRef = useRef(null);
   const fileUrl = book ? `${R2_BASE_URL}/${book.file}` : null;
   const pdfStatus = usePdfAvailability(fileUrl);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -34,11 +37,17 @@ export default function BookModal({ book, color, subjectLabel, onClose, onRead }
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    setExpanded(false);
+  }, [book?.id]);
+
   if (!book) return null;
 
   const available = pdfStatus === "available";
   const progress = getProgress(book.id);
   const resuming = progress && progress.page > 1 && (!progress.numPages || progress.page < progress.numPages);
+  const description = book.description || "";
+  const needsClamp = description.length > CLAMP_THRESHOLD;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -60,7 +69,6 @@ export default function BookModal({ book, color, subjectLabel, onClose, onRead }
             <span className="modal__badge" style={{ "--badge-color": color }}>{subjectLabel}</span>
             <h2 id="modal-title" className="modal__title">{book.title}</h2>
             <p className="modal__meta">{book.author} · {book.edition}</p>
-            <p className="modal__description">{book.description}</p>
             <div className="modal__actions">
               <button type="button" className="btn btn--primary" disabled={!available} onClick={() => onRead(book.id)}>
                 {resuming ? `Continue — page ${progress.page}` : "Read in browser"}
@@ -75,6 +83,18 @@ export default function BookModal({ book, color, subjectLabel, onClose, onRead }
                 Download PDF
               </a>
             </div>
+            {description && (
+              <>
+                <p className={`modal__description ${needsClamp && !expanded ? "modal__description--clamped" : ""}`}>
+                  {description}
+                </p>
+                {needsClamp && (
+                  <button type="button" className="modal__read-more" onClick={() => setExpanded((v) => !v)}>
+                    {expanded ? "Show less" : "Read more"}
+                  </button>
+                )}
+              </>
+            )}
             {pdfStatus === "missing" && (
               <p className="modal__note">
                 Not added yet — upload it to R2 at <code>{book.file}</code> to make it readable.
