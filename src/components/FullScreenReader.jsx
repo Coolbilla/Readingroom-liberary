@@ -7,13 +7,18 @@ import { setProgress } from "../utils/progress.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
-// Fetching the whole file in one GET (no Range requests) keeps this simple
-// and works the same in dev and production static hosting.
-const PDF_OPTIONS = { disableRange: true, disableStream: true, disableAutoFetch: true };
+// R2 supports HTTP range requests, so pdf.js only needs to fetch the bytes for
+// pages actually being viewed instead of buffering the whole file in memory —
+// critical for large scanned books (one reference book here is 1365 pages/21MB).
+const PDF_OPTIONS = { disableAutoFetch: true };
 
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 2;
 const BASE_WIDTH = 720;
+// Scroll mode only ever mounts pages within this many slots of the current
+// page — rendering hundreds of full-page canvases at once is what was making
+// long books lag phones and laptops.
+const SCROLL_RENDER_WINDOW = 2;
 const MODES = [
   { key: "single", label: "Page" },
   { key: "scroll", label: "Scroll" },
@@ -46,6 +51,7 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
   const [viewportWidth, setViewportWidth] = useState(BASE_WIDTH);
   const [copied, setCopied] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pageAspect, setPageAspect] = useState(1.294); // ISO-A-ish default until the first page reports its real size
   const viewportRef = useRef(null);
   const closeRef = useRef(null);
   const pageRefs = useRef([]);
@@ -346,11 +352,27 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
 
             {mode === "scroll" &&
               numPages &&
-              Array.from({ length: numPages }, (_, i) => (
-                <div key={i} className="reader__scroll-page" ref={(el) => (pageRefs.current[i] = el)}>
-                  <Page pageNumber={i + 1} width={pageWidth} renderAnnotationLayer={false} />
-                </div>
-              ))}
+              Array.from({ length: numPages }, (_, i) => {
+                const n = i + 1;
+                const inWindow = Math.abs(n - pageNumber) <= SCROLL_RENDER_WINDOW;
+                return (
+                  <div key={i} className="reader__scroll-page" ref={(el) => (pageRefs.current[i] = el)}>
+                    {inWindow ? (
+                      <Page
+                        pageNumber={n}
+                        width={pageWidth}
+                        renderAnnotationLayer={false}
+                        onLoadSuccess={(page) => n === 1 && setPageAspect(page.height / page.width)}
+                      />
+                    ) : (
+                      <div
+                        className="reader__scroll-placeholder"
+                        style={{ width: pageWidth, height: Math.round(pageWidth * pageAspect) }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
           </Document>
         )}
       </div>

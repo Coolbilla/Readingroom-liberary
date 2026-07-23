@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import Navbar from "./components/Navbar.jsx";
 import SearchBar from "./components/SearchBar.jsx";
 import CategoryTabs from "./components/CategoryTabs.jsx";
 import BookGrid from "./components/BookGrid.jsx";
 import BookModal from "./components/BookModal.jsx";
-import FullScreenReader from "./components/FullScreenReader.jsx";
 import AdminPanel from "./components/AdminPanel.jsx";
 import BookCard from "./components/BookCard.jsx";
 import { SECTIONS, CATEGORIES_BY_SECTION, R2_BASE_URL, fetchBooks } from "./data/books.js";
 import { getProgress, getAllProgress } from "./utils/progress.js";
+
+// pdf.js is over 1MB — only worth loading once someone actually opens a book,
+// not on every visit to the browsing grid.
+const FullScreenReader = lazy(() => import("./components/FullScreenReader.jsx"));
 
 const categoryByKey = Object.fromEntries(
   Object.values(CATEGORIES_BY_SECTION)
@@ -183,12 +186,14 @@ export default function App() {
       )}
 
       {readingBook && (
-        <FullScreenReader
-          book={readingBook}
-          fileUrl={`${R2_BASE_URL}/${readingBook.file}`}
-          initialPage={route.page}
-          onClose={goHome}
-        />
+        <Suspense fallback={<div className="reader"><p className="reader__status">Loading reader…</p></div>}>
+          <FullScreenReader
+            book={readingBook}
+            fileUrl={`${R2_BASE_URL}/${readingBook.file}`}
+            initialPage={route.page}
+            onClose={goHome}
+          />
+        </Suspense>
       )}
     </div>
   );

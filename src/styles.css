@@ -739,6 +739,12 @@ code {
   margin-top: 0;
 }
 
+.reader__scroll-placeholder {
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 4px 16px rgba(16, 24, 40, 0.15);
+}
+
 .reader__viewport .react-pdf__Page {
   box-shadow: 0 4px 16px rgba(16, 24, 40, 0.15);
 }
