@@ -609,11 +609,24 @@ code {
 }
 
 .reader__controls {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
   flex: none;
+}
+
+.reader__extra {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.reader__hamburger,
+.reader__menu-backdrop {
+  display: none;
 }
 
 .reader__modes {
@@ -825,6 +838,59 @@ code {
   .reader__bar {
     padding: 0.6rem 0.85rem;
   }
+
+  .reader__hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    flex: none;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 8px;
+    font-size: 1.05rem;
+    cursor: pointer;
+    color: var(--text);
+  }
+
+  .reader__menu-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: transparent;
+  }
+
+  .reader__extra {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    width: 14rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.85rem;
+    box-shadow: 0 12px 28px rgba(16, 24, 40, 0.2);
+    z-index: 40;
+  }
+
+  .reader__extra[data-open] {
+    display: flex;
+  }
+
+  .reader__extra .reader__modes {
+    justify-content: space-between;
+  }
+
+  .reader__extra .reader__zoom {
+    justify-content: center;
+  }
 }
 
 /* ---------- Admin ---------- */
@@ -930,6 +996,14 @@ code {
   grid-column: 1 / -1;
 }
 
+.admin__file-readonly {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--text-dim);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
 .admin__checkbox {
   flex-direction: row !important;
   align-items: center;
@@ -982,9 +1056,38 @@ code {
 .admin__note {
   color: var(--text-dim);
   font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+.admin__note--tight {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 0.35rem 0 0;
+  max-width: 34rem;
+}
+
+.admin__sync {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.admin__sync .btn {
+  flex: none;
+  white-space: nowrap;
 }
 
 @media (max-width: 560px) {
+  .admin__sync {
+    flex-direction: column;
+  }
+
   .admin__grid {
     grid-template-columns: 1fr;
   }

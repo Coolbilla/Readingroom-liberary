@@ -20,6 +20,16 @@ const MODES = [
   { key: "spread", label: "Spread" },
 ];
 
+function clamp(n, min, max) {
+  return Math.min(Math.max(n, min), max);
+}
+
+function touchDistance(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+
 // Rendered with pdf.js instead of a bare <iframe>/<a target="_blank"> so reading
 // never depends on the visitor's browser PDF settings — some browsers are set to
 // download PDFs rather than open them, which would hijack the "read" action.
@@ -35,10 +45,12 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
   const [loadError, setLoadError] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(BASE_WIDTH);
   const [copied, setCopied] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const viewportRef = useRef(null);
   const closeRef = useRef(null);
   const pageRefs = useRef([]);
   const scrolledInitial = useRef(false);
+  const pinch = useRef({ active: false, startDist: 0, startScale: 1 });
 
   if (numPages && pageRefs.current.length !== numPages) {
     pageRefs.current = new Array(numPages).fill(null);
@@ -57,7 +69,7 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
 
   function goToPage(n) {
     if (!numPages) return;
-    const clamped = Math.min(Math.max(n, 1), numPages);
+    const clamped = clamp(n, 1, numPages);
     setPageDraft(String(clamped));
     if (mode === "scroll") {
       pageRefs.current[clamped - 1]?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -80,6 +92,41 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
+
+  // Two-finger pinch to zoom. touchmove needs a non-passive native listener
+  // (React's JSX touch handlers are passive by default) so preventDefault()
+  // can actually stop the browser's own page-zoom/scroll while pinching.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+
+    function onTouchStart(e) {
+      if (e.touches.length === 2) {
+        pinch.current = { active: true, startDist: touchDistance(e.touches), startScale: scale };
+      }
+    }
+
+    function onTouchMove(e) {
+      if (!pinch.current.active || e.touches.length !== 2) return;
+      e.preventDefault();
+      const ratio = touchDistance(e.touches) / pinch.current.startDist;
+      setScale(clamp(pinch.current.startScale * ratio, MIN_SCALE, MAX_SCALE));
+    }
+
+    function onTouchEnd(e) {
+      if (e.touches.length < 2) pinch.current.active = false;
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale]);
 
   // Keeps the URL shareable and bookmarkable — reloading or sending the link
   // reopens this exact book at this exact page. Also remembers your spot so
@@ -130,7 +177,7 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
   useEffect(() => {
     function onKeyDown(e) {
       if (e.target.tagName === "INPUT") return;
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") (menuOpen ? setMenuOpen(false) : onClose());
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
       if (e.key === "+" || e.key === "=") setScale((s) => Math.min(s + 0.2, MAX_SCALE));
@@ -139,7 +186,7 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [numPages, pageNumber, mode, onClose]);
+  }, [numPages, pageNumber, mode, menuOpen, onClose]);
 
   async function handleShare() {
     const url = window.location.href;
@@ -165,42 +212,6 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
         <span className="reader__title">{book.title}</span>
 
         <div className="reader__controls">
-          <div className="reader__modes" role="group" aria-label="View mode">
-            {MODES.map((m) => (
-              <button
-                key={m.key}
-                type="button"
-                className="reader__mode-btn"
-                data-active={mode === m.key || undefined}
-                onClick={() => setMode(m.key)}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="reader__zoom">
-            <button
-              type="button"
-              className="reader__page-btn"
-              onClick={() => setScale((s) => Math.max(s - 0.2, MIN_SCALE))}
-              disabled={scale <= MIN_SCALE}
-              aria-label="Zoom out"
-            >
-              −
-            </button>
-            <span className="reader__zoom-level">{Math.round(scale * 100)}%</span>
-            <button
-              type="button"
-              className="reader__page-btn"
-              onClick={() => setScale((s) => Math.min(s + 0.2, MAX_SCALE))}
-              disabled={scale >= MAX_SCALE}
-              aria-label="Zoom in"
-            >
-              +
-            </button>
-          </div>
-
           {numPages && (
             <div className="reader__pager">
               <button
@@ -242,12 +253,72 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
             </div>
           )}
 
-          <button type="button" className="btn btn--secondary reader__share" onClick={handleShare}>
-            {copied ? "Link copied" : "Share this page"}
+          <button
+            type="button"
+            className="reader__hamburger"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="More options"
+            aria-expanded={menuOpen}
+          >
+            ☰
           </button>
-          <a className="btn btn--secondary reader__download" href={fileUrl} download>
-            Download
-          </a>
+
+          {menuOpen && <div className="reader__menu-backdrop" onClick={() => setMenuOpen(false)} />}
+
+          <div className="reader__extra" data-open={menuOpen || undefined}>
+            <div className="reader__modes" role="group" aria-label="View mode">
+              {MODES.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  className="reader__mode-btn"
+                  data-active={mode === m.key || undefined}
+                  onClick={() => {
+                    setMode(m.key);
+                    setMenuOpen(false);
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="reader__zoom">
+              <button
+                type="button"
+                className="reader__page-btn"
+                onClick={() => setScale((s) => Math.max(s - 0.2, MIN_SCALE))}
+                disabled={scale <= MIN_SCALE}
+                aria-label="Zoom out"
+              >
+                −
+              </button>
+              <span className="reader__zoom-level">{Math.round(scale * 100)}%</span>
+              <button
+                type="button"
+                className="reader__page-btn"
+                onClick={() => setScale((s) => Math.min(s + 0.2, MAX_SCALE))}
+                disabled={scale >= MAX_SCALE}
+                aria-label="Zoom in"
+              >
+                +
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn--secondary reader__share"
+              onClick={() => {
+                handleShare();
+                setMenuOpen(false);
+              }}
+            >
+              {copied ? "Link copied" : "Share this page"}
+            </button>
+            <a className="btn btn--secondary reader__download" href={fileUrl} download>
+              Download
+            </a>
+          </div>
         </div>
       </div>
 

@@ -3,9 +3,10 @@ import {
   SECTIONS,
   CATEGORIES_BY_SECTION,
   fetchBooks,
-  createBook,
   updateBook,
   deleteBook,
+  syncLibrary,
+  uploadBook,
   getAdminToken,
   setAdminToken,
   clearAdminToken,
@@ -24,6 +25,8 @@ const EMPTY_FORM = {
   series: "",
   volume: "",
   recent: false,
+  pdfFile: null,
+  posterFile: null,
 };
 
 export default function AdminPanel({ onBooksChanged, onClose }) {
@@ -35,6 +38,8 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("");
 
   function refresh() {
     setLoading(true);
@@ -61,6 +66,27 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
     setForm(EMPTY_FORM);
   }
 
+  async function handleSync() {
+    setSyncing(true);
+    setSyncStatus("");
+    setError("");
+    try {
+      const { added, postersFilled } = await syncLibrary();
+      setSyncStatus(
+        added === 0 && postersFilled === 0
+          ? "No new books found — everything's already in the catalog."
+          : `Added ${added} new book${added === 1 ? "" : "s"}, filled in ${postersFilled} poster${postersFilled === 1 ? "" : "s"}.`
+      );
+      refresh();
+      onBooksChanged?.();
+    } catch (e) {
+      setError(e.message);
+      if (!getAdminToken()) setAuthed(false);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   function startEdit(book) {
     setEditingId(book.id);
     setForm({
@@ -76,6 +102,8 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
       series: book.series || "",
       volume: book.volume ?? "",
       recent: book.recent,
+      pdfFile: null,
+      posterFile: null,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -90,11 +118,19 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
     setSaving(true);
     setError("");
     try {
-      const payload = { ...form, volume: form.volume ? Number(form.volume) : null, series: form.series || null };
       if (editingId) {
+        const payload = { ...form, volume: form.volume ? Number(form.volume) : null, series: form.series || null };
         await updateBook(editingId, payload);
       } else {
-        await createBook(payload);
+        if (!form.pdfFile) throw new Error("Choose a PDF file to upload.");
+        const data = new FormData();
+        for (const key of ["title", "author", "edition", "section", "subject", "callNumber", "description", "series", "volume"]) {
+          if (form[key]) data.set(key, form[key]);
+        }
+        data.set("recent", form.recent ? "true" : "false");
+        data.set("pdf", form.pdfFile);
+        if (form.posterFile) data.set("poster", form.posterFile);
+        await uploadBook(data);
       }
       setForm(EMPTY_FORM);
       setEditingId(null);
@@ -155,7 +191,24 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
             </div>
           </form>
         ) : (
-          <form className="admin__form" onSubmit={handleSubmit}>
+          <>
+            <div className="admin__sync">
+              <div>
+                <h2 className="admin__form-title">Scan library folders</h2>
+                <p className="admin__note admin__note--tight">
+                  Drop a folder into R2 as <code>books/&lt;section&gt;/Book_Name_With_Underscores/</code>, with a{" "}
+                  <code>poster/</code> subfolder for the cover and PDFs named <code>1.pdf</code>, <code>2.pdf</code>,
+                  etc. (one PDF = a standalone book, several = volumes of a series). Scan picks up new folders
+                  automatically — you still add author, description, and subject/genre here afterward.
+                </p>
+              </div>
+              <button type="button" className="btn btn--secondary" onClick={handleSync} disabled={syncing}>
+                {syncing ? "Scanning…" : "Scan Library"}
+              </button>
+            </div>
+            {syncStatus && <p className="admin__note">{syncStatus}</p>}
+
+            <form className="admin__form" onSubmit={handleSubmit}>
             <h2 className="admin__form-title">{editingId ? "Edit book" : "Add a book"}</h2>
             <div className="admin__grid">
               <label>
@@ -239,23 +292,45 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
                 />
                 Mark as recently added
               </label>
-              <label className="admin__field-wide">
-                PDF file key (R2)
-                <input
-                  value={form.file}
-                  onChange={(e) => setForm({ ...form, file: e.target.value })}
-                  placeholder={`books/${form.section}/your-file.pdf`}
-                  required
-                />
-              </label>
-              <label className="admin__field-wide">
-                Poster image URL
-                <input
-                  value={form.poster}
-                  onChange={(e) => setForm({ ...form, poster: e.target.value })}
-                  placeholder={`https://pub-....r2.dev/books/${form.section}/posters-cover-page/your-cover.jpg`}
-                />
-              </label>
+              {editingId ? (
+                <>
+                  <label className="admin__field-wide">
+                    PDF file
+                    <span className="admin__file-readonly">
+                      <code>{form.file}</code> — re-upload isn't supported from Edit yet; delete and re-add to
+                      replace the file.
+                    </span>
+                  </label>
+                  {form.poster && (
+                    <label className="admin__field-wide">
+                      Poster
+                      <span className="admin__file-readonly">
+                        <code>{form.poster}</code>
+                      </span>
+                    </label>
+                  )}
+                </>
+              ) : (
+                <>
+                  <label className="admin__field-wide">
+                    PDF file
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(e) => setForm({ ...form, pdfFile: e.target.files[0] || null })}
+                      required
+                    />
+                  </label>
+                  <label className="admin__field-wide">
+                    Poster image (optional)
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setForm({ ...form, posterFile: e.target.files[0] || null })}
+                    />
+                  </label>
+                </>
+              )}
               <label className="admin__field-wide">
                 Description
                 <textarea
@@ -267,7 +342,7 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
             </div>
             <div className="admin__form-actions">
               <button type="submit" className="btn btn--primary" disabled={saving}>
-                {saving ? "Saving…" : editingId ? "Save changes" : "Add book"}
+                {saving ? (editingId ? "Saving…" : "Uploading…") : editingId ? "Save changes" : "Add book"}
               </button>
               {editingId && (
                 <button type="button" className="btn btn--secondary" onClick={cancelEdit}>
@@ -275,7 +350,8 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
                 </button>
               )}
             </div>
-          </form>
+            </form>
+          </>
         )}
 
         <h2 className="admin__form-title">Catalog ({books.length})</h2>

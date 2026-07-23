@@ -8,5 +8,11 @@
       "database_name": "reading-room-db",
       "database_id": "908ac70f-5fba-4caf-8a58-dbd3616aecaf"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "reading-room"
+    }
   ]
 }

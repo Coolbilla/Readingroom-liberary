@@ -56,15 +56,7 @@ export function clearAdminToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-async function authedFetch(path, options = {}) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getAdminToken()}`,
-      ...options.headers,
-    },
-  });
+async function handleAuthedResponse(res) {
   if (res.status === 401) {
     clearAdminToken();
     throw new Error("Wrong password — try again.");
@@ -76,14 +68,22 @@ async function authedFetch(path, options = {}) {
   return res.json();
 }
 
+async function authedFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getAdminToken()}`,
+      ...options.headers,
+    },
+  });
+  return handleAuthedResponse(res);
+}
+
 export async function fetchBooks() {
   const res = await fetch(`${API_BASE_URL}/api/books`);
   if (!res.ok) throw new Error("Couldn't load the catalog.");
   return res.json();
-}
-
-export function createBook(book) {
-  return authedFetch("/api/books", { method: "POST", body: JSON.stringify(book) });
 }
 
 export function updateBook(id, book) {
@@ -92,4 +92,23 @@ export function updateBook(id, book) {
 
 export function deleteBook(id) {
   return authedFetch(`/api/books/${id}`, { method: "DELETE" });
+}
+
+// Scans R2 for book folders (see the folder convention in the admin panel)
+// and adds any new ones to the catalog. Safe to re-run — already-known files
+// are left alone except for backfilling a poster that was added later.
+export function syncLibrary() {
+  return authedFetch("/api/sync", { method: "POST" });
+}
+
+// Uploads the PDF (+ optional poster) directly and creates the book record in
+// one step. Doesn't go through authedFetch — a FormData body needs the browser
+// to set its own multipart Content-Type header, not "application/json".
+export async function uploadBook(formData) {
+  const res = await fetch(`${API_BASE_URL}/api/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getAdminToken()}` },
+    body: formData,
+  });
+  return handleAuthedResponse(res);
 }
