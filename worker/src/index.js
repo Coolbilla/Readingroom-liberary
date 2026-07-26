@@ -25,8 +25,17 @@ function rowToBook(row) {
     poster: row.poster,
     series: row.series,
     volume: row.volume,
+    chapters: row.chapters ? JSON.parse(row.chapters) : null,
     recent: Boolean(row.recent),
   };
+}
+
+// "08_Calc1_Chapter5w.pdf" -> "Chapter5w" -> "Chapter5w" (strip numeric
+// prefix + extension, swap separators for spaces; good enough, book naming
+// noise like a trailing "w" is left as-is rather than guessed at).
+function chapterLabel(filename) {
+  const stripped = filename.replace(/\.pdf$/i, "").replace(/^\d+[\s_-]*/, "").replace(/[_-]+/g, " ").trim();
+  return stripped || filename;
 }
 
 function slugify(title) {
@@ -165,9 +174,12 @@ async function resolveIdAndTitle(env, title, series, volume) {
   return { id, bookTitle };
 }
 
-// POST /api/upload — accepts the actual PDF (+ optional poster) as files,
-// uploads them to R2 under the same folder convention syncLibrary() expects,
-// and creates the D1 record immediately (no separate scan step needed).
+// POST /api/upload — accepts the actual PDF (+ optional poster, + optional
+// multiple chapter PDFs) as files, uploads them to R2 under the same folder
+// convention syncLibrary() expects, and creates the D1 record immediately.
+// A book split across several PDFs (chapters of one book, not separate
+// volumes) uploads all of them here as "chapters" instead of each becoming
+// its own catalog card — that's what series/volume is for instead.
 async function uploadBook(request, env) {
   const form = await request.formData();
   const title = form.get("title");
@@ -175,19 +187,38 @@ async function uploadBook(request, env) {
   const section = form.get("section") || "reference-classbooks";
   const subject = form.get("subject");
   const pdf = form.get("pdf");
+  const chapterFiles = form.getAll("chapters").filter((f) => f instanceof File && f.size > 0);
+  const hasPdf = pdf instanceof File && pdf.size > 0;
 
-  if (!title || !author || !subject || !(pdf instanceof File) || pdf.size === 0) {
-    return json({ error: "title, author, subject, and a PDF file are required" }, 400);
+  if (!title || !author || !subject || (!hasPdf && chapterFiles.length === 0)) {
+    return json({ error: "title, author, subject, and a PDF file (or chapter files) are required" }, 400);
   }
 
   const series = form.get("series") || null;
   const volume = form.get("volume") ? parseInt(form.get("volume"), 10) : null;
   const folderName = (series || title).replace(/\s+/g, "_");
 
-  const pdfKey = `books/${section}/${folderName}/${volume || 1}.pdf`;
-  await env.BUCKET.put(pdfKey, await pdf.arrayBuffer(), {
-    httpMetadata: { contentType: "application/octet-stream" },
-  });
+  let chapters = null;
+  if (chapterFiles.length > 0) {
+    chapters = [];
+    for (const file of chapterFiles) {
+      const key = `books/${section}/${folderName}/chapters/${file.name}`;
+      await env.BUCKET.put(key, await file.arrayBuffer(), {
+        httpMetadata: { contentType: "application/octet-stream" },
+      });
+      chapters.push({ label: chapterLabel(file.name), file: key });
+    }
+  }
+
+  let pdfKey;
+  if (hasPdf) {
+    pdfKey = `books/${section}/${folderName}/${volume || 1}.pdf`;
+    await env.BUCKET.put(pdfKey, await pdf.arrayBuffer(), {
+      httpMetadata: { contentType: "application/octet-stream" },
+    });
+  } else {
+    pdfKey = chapters[0].file; // no standalone PDF — default to the first chapter
+  }
 
   let posterUrl = null;
   const poster = form.get("poster");
@@ -203,8 +234,8 @@ async function uploadBook(request, env) {
   const { id, bookTitle } = await resolveIdAndTitle(env, title, series, volume);
 
   await env.DB.prepare(
-    `INSERT INTO books (id, title, author, edition, section, subject, call_number, description, file, poster, series, volume, recent)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO books (id, title, author, edition, section, subject, call_number, description, file, poster, series, volume, chapters, recent)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -219,6 +250,7 @@ async function uploadBook(request, env) {
       posterUrl,
       series,
       volume,
+      chapters ? JSON.stringify(chapters) : null,
       form.get("recent") === "true" ? 1 : 0
     )
     .run();
@@ -258,41 +290,6 @@ export default {
     // POST /api/upload — upload a PDF (+ optional poster) directly and create its record.
     if (request.method === "POST" && url.pathname === "/api/upload") {
       return uploadBook(request, env);
-    }
-
-    // POST /api/books — create a book.
-    if (request.method === "POST" && url.pathname === "/api/books") {
-      const body = await request.json();
-      if (!body.title || !body.author || !body.subject || !body.file) {
-        return json({ error: "title, author, subject, and file are required" }, 400);
-      }
-      let id = slugify(body.title);
-      const existing = await env.DB.prepare("SELECT id FROM books WHERE id = ?").bind(id).first();
-      if (existing) id = `${id}-${Math.random().toString(36).slice(2, 6)}`;
-
-      await env.DB.prepare(
-        `INSERT INTO books (id, title, author, edition, section, subject, call_number, description, file, poster, series, volume, recent)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          id,
-          body.title,
-          body.author,
-          body.edition || null,
-          body.section || "reference-classbooks",
-          body.subject,
-          body.callNumber || null,
-          body.description || null,
-          body.file,
-          body.poster || null,
-          body.series || null,
-          body.volume || null,
-          body.recent ? 1 : 0
-        )
-        .run();
-
-      const row = await env.DB.prepare("SELECT * FROM books WHERE id = ?").bind(id).first();
-      return json(rowToBook(row), 201);
     }
 
     // PUT /api/books/:id — update a book.

@@ -95,6 +95,18 @@ export default function BookModal({ book, color, subjectLabel, onClose, onRead }
                 )}
               </>
             )}
+            {book.chapters && book.chapters.length > 0 && (
+              <div className="modal__chapters">
+                <p className="modal__chapters-label">Chapters</p>
+                <div className="modal__chapters-list">
+                  {book.chapters.map((ch, i) => (
+                    <button key={i} type="button" className="modal__chapter" onClick={() => onRead(book.id, ch.file)}>
+                      {ch.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {pdfStatus === "missing" && (
               <p className="modal__note">
                 Not added yet — upload it to R2 at <code>{book.file}</code> to make it readable.

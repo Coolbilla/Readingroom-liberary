@@ -555,6 +555,45 @@ code {
   pointer-events: none;
 }
 
+.modal__chapters {
+  margin: 0 0 1.1rem;
+}
+
+.modal__chapters-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 0.5rem;
+}
+
+.modal__chapters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 11rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem;
+}
+
+.modal__chapter {
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.modal__chapter:hover {
+  background: var(--bg);
+}
+
 .modal__note {
   margin: 0.85rem 0 0;
   font-size: 0.82rem;

@@ -22,11 +22,13 @@ const EMPTY_FORM = {
   description: "",
   file: "",
   poster: "",
+  chapters: null,
   series: "",
   volume: "",
   recent: false,
   pdfFile: null,
   posterFile: null,
+  chapterFiles: [],
 };
 
 export default function AdminPanel({ onBooksChanged, onClose }) {
@@ -99,11 +101,13 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
       description: book.description || "",
       file: book.file,
       poster: book.poster || "",
+      chapters: book.chapters || null,
       series: book.series || "",
       volume: book.volume ?? "",
       recent: book.recent,
       pdfFile: null,
       posterFile: null,
+      chapterFiles: [],
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -122,14 +126,17 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
         const payload = { ...form, volume: form.volume ? Number(form.volume) : null, series: form.series || null };
         await updateBook(editingId, payload);
       } else {
-        if (!form.pdfFile) throw new Error("Choose a PDF file to upload.");
+        if (!form.pdfFile && form.chapterFiles.length === 0) {
+          throw new Error("Choose a PDF file (or chapter files) to upload.");
+        }
         const data = new FormData();
         for (const key of ["title", "author", "edition", "section", "subject", "callNumber", "description", "series", "volume"]) {
           if (form[key]) data.set(key, form[key]);
         }
         data.set("recent", form.recent ? "true" : "false");
-        data.set("pdf", form.pdfFile);
+        if (form.pdfFile) data.set("pdf", form.pdfFile);
         if (form.posterFile) data.set("poster", form.posterFile);
+        for (const f of form.chapterFiles) data.append("chapters", f);
         await uploadBook(data);
       }
       setForm(EMPTY_FORM);
@@ -143,6 +150,15 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
       setSaving(false);
     }
   }
+
+  // Subject/genre is free text — this just powers the <datalist> autocomplete
+  // with the built-in defaults plus whatever's already used in this section.
+  const subjectOptions = [
+    ...new Set([
+      ...CATEGORIES_BY_SECTION[form.section].map((c) => c.key),
+      ...books.filter((b) => (b.section || "reference-classbooks") === form.section).map((b) => b.subject),
+    ]),
+  ];
 
   async function handleDelete(book) {
     if (!window.confirm(`Remove "${book.title}" from the catalog?`)) return;
@@ -249,13 +265,18 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
               </label>
               <label>
                 {form.section === "reference-classbooks" ? "Subject" : "Genre"}
-                <select value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}>
-                  {CATEGORIES_BY_SECTION[form.section].map((s) => (
-                    <option key={s.key} value={s.key}>
-                      {s.label}
-                    </option>
+                <input
+                  list="subject-options"
+                  value={form.subject}
+                  onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                  placeholder="Type an existing one or a new one"
+                  required
+                />
+                <datalist id="subject-options">
+                  {subjectOptions.map((s) => (
+                    <option key={s} value={s} />
                   ))}
-                </select>
+                </datalist>
               </label>
               <label>
                 Call number
@@ -309,16 +330,33 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
                       </span>
                     </label>
                   )}
+                  {form.chapters && (
+                    <label className="admin__field-wide">
+                      Chapters
+                      <span className="admin__file-readonly">
+                        {form.chapters.map((c) => c.label).join(", ")} — re-upload isn't supported from Edit yet.
+                      </span>
+                    </label>
+                  )}
                 </>
               ) : (
                 <>
                   <label className="admin__field-wide">
-                    PDF file
+                    PDF file {form.chapterFiles.length > 0 && "(optional — chapters below already cover it)"}
                     <input
                       type="file"
                       accept="application/pdf"
                       onChange={(e) => setForm({ ...form, pdfFile: e.target.files[0] || null })}
-                      required
+                    />
+                  </label>
+                  <label className="admin__field-wide">
+                    Chapters (optional — for a book split across several PDFs, pick them all here instead of the
+                    single PDF field above; each becomes a chapter you can pick from in the reader)
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      multiple
+                      onChange={(e) => setForm({ ...form, chapterFiles: Array.from(e.target.files) })}
                     />
                   </label>
                   <label className="admin__field-wide">
@@ -365,7 +403,8 @@ export default function AdminPanel({ onBooksChanged, onClose }) {
                   <p className="admin__row-title">{book.title}</p>
                   <p className="admin__row-meta">
                     {book.author} · {SECTIONS.find((s) => s.key === book.section)?.label ?? book.section} · {book.subject}
-                    {book.series && ` · ${book.series} Vol. ${book.volume}`} · <code>{book.file}</code>
+                    {book.series && ` · ${book.series} Vol. ${book.volume}`}
+                    {book.chapters && ` · ${book.chapters.length} chapters`} · <code>{book.file}</code>
                   </p>
                 </div>
                 {authed && (

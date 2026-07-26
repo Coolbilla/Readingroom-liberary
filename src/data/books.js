@@ -42,6 +42,16 @@ export const CATEGORIES_BY_SECTION = {
   "comics-manga": COMIC_GENRES,
 };
 
+// Categories aren't a managed list — typing a new subject/genre when adding a
+// book is how one "gets added". This gives any string a stable color so
+// custom categories (e.g. "Physics") still get a consistent badge/tab color.
+const PALETTE = ["#C7A250", "#4C7A96", "#3E8074", "#A6432D", "#7A5C7E", "#5B6B7A", "#8E6BAF", "#5A8F4C"];
+export function colorForCategory(key) {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  return PALETTE[Math.abs(hash) % PALETTE.length];
+}
+
 const TOKEN_KEY = "reading-room-admin-token";
 
 export function getAdminToken() {
