@@ -207,6 +207,8 @@ export default function App() {
           <FullScreenReader
             book={readingBook}
             fileUrl={`${R2_BASE_URL}/${route.file || readingBook.file}`}
+            currentFile={route.file || readingBook.file}
+            onSelectChapter={(file) => openReader(readingBook.id, file)}
             initialPage={route.page}
             onClose={goHome}
           />

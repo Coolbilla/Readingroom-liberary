@@ -1,0 +1,12 @@
+{
+  "name": "Reading Room — MPSTME Reference Shelf",
+  "short_name": "Reading Room",
+  "description": "Search, read, and download MPSTME class reference books.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2657d9",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

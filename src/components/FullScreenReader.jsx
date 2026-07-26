@@ -41,7 +41,7 @@ function touchDistance(touches) {
 // Books are served from R2 with Content-Type: application/octet-stream rather
 // than application/pdf — browsers intercept fetch() of PDF-typed responses and
 // silently empty the body, which would otherwise break pdf.js here.
-export default function FullScreenReader({ book, fileUrl, initialPage, onClose }) {
+export default function FullScreenReader({ book, fileUrl, currentFile, onSelectChapter, initialPage, onClose }) {
   const [numPages, setNumPages] = useState(null);
   const [pageNumber, setPageNumber] = useState(initialPage ?? 1);
   const [pageDraft, setPageDraft] = useState(String(initialPage ?? 1));
@@ -272,6 +272,24 @@ export default function FullScreenReader({ book, fileUrl, initialPage, onClose }
           {menuOpen && <div className="reader__menu-backdrop" onClick={() => setMenuOpen(false)} />}
 
           <div className="reader__extra" data-open={menuOpen || undefined}>
+            {book.chapters && book.chapters.length > 0 && (
+              <select
+                className="reader__chapter-select"
+                aria-label="Chapter"
+                value={currentFile}
+                onChange={(e) => {
+                  onSelectChapter(e.target.value);
+                  setMenuOpen(false);
+                }}
+              >
+                {book.chapters.map((ch) => (
+                  <option key={ch.file} value={ch.file}>
+                    {ch.label}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <div className="reader__modes" role="group" aria-label="View mode">
               {MODES.map((m) => (
                 <button
