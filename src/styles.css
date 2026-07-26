@@ -771,6 +771,7 @@ code {
   display: flex;
   justify-content: center;
   padding: 1.5rem 1rem 3rem;
+  touch-action: pan-y;
 }
 
 .reader__viewport .react-pdf__Document {
