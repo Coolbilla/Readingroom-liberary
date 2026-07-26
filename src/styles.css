@@ -767,11 +767,11 @@ code {
 
 .reader__viewport {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   display: flex;
   justify-content: center;
   padding: 1.5rem 1rem 3rem;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
 }
 
 .reader__viewport .react-pdf__Document {

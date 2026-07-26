@@ -65,8 +65,11 @@ export default function FullScreenReader({ book, fileUrl, currentFile, onSelectC
   const spreadLeft = pageNumber === 1 ? 1 : pageNumber % 2 === 0 ? pageNumber : pageNumber - 1;
   const spreadRight = spreadLeft === 1 ? null : Math.min(spreadLeft + 1, numPages ?? spreadLeft + 1);
 
-  const singleWidth = Math.round(Math.min(viewportWidth - 32, BASE_WIDTH * scale));
-  const spreadWidth = Math.round(Math.min((viewportWidth - 48) / 2, (BASE_WIDTH * scale) / 1.4));
+  // Fit-to-viewport width first, *then* apply scale — clamping scale into the
+  // fit width (the old order) meant zoom had no visible effect on any screen
+  // narrower than BASE_WIDTH, i.e. every phone.
+  const singleWidth = Math.round(Math.min(viewportWidth - 32, BASE_WIDTH) * scale);
+  const spreadWidth = Math.round((Math.min(viewportWidth - 48, BASE_WIDTH) / 1.4 / 2) * scale);
   const pageWidth = mode === "spread" ? spreadWidth : singleWidth;
 
   useEffect(() => {
@@ -346,7 +349,11 @@ export default function FullScreenReader({ book, fileUrl, currentFile, onSelectC
         </div>
       </div>
 
-      <div className="reader__viewport" ref={viewportRef}>
+      <div
+        className="reader__viewport"
+        ref={viewportRef}
+        style={{ justifyContent: scale > 1 ? "flex-start" : "center" }}
+      >
         {loadError ? (
           <p className="reader__error">
             Couldn't open this PDF. Try <a href={fileUrl} download>downloading it</a> instead.
